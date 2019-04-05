@@ -14,6 +14,7 @@
 * <<load-csv-importing-large-amounts-of-data, Importing large amounts of data>>
 * <<load-csv-setting-the-rate-of-periodic-commits, Setting the rate of periodic commits>>
 * <<load-csv-import-data-containing-escaped-characters, Import data containing escaped characters>>
+* <<load-csv-import-data-with-errors, Import data that leads to Cypher errors>>
 
 
 [[query-load-csv-introduction,Introduction]]
@@ -67,4 +68,5 @@ include::setting-the-rate-of-periodic-commits.asciidoc[]
 
 include::import-data-containing-escaped-characters.asciidoc[]
 
+include::import-data-with-errors.asciidoc[]
 

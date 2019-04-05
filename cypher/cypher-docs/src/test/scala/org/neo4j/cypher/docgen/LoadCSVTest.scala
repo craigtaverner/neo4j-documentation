@@ -19,11 +19,13 @@
  */
 package org.neo4j.cypher.docgen
 
+import java.io.File
+
+import org.junit.Assert._
+import org.junit.Test
+import org.neo4j.cypher.CypherException
 import org.neo4j.cypher.docgen.tooling.QueryStatisticsTestSupport
 import org.neo4j.visualization.graphviz.{AsciiDocSimpleStyle, GraphStyle}
-import org.junit.Test
-import java.io.File
-import org.junit.Assert._
 
 class LoadCSVTest extends DocumentingTestBase with QueryStatisticsTestSupport with SoftReset {
   override protected def getGraphvizStyle: GraphStyle =
@@ -60,18 +62,27 @@ class LoadCSVTest extends DocumentingTestBase with QueryStatisticsTestSupport wi
     Seq("1", "The \"\"Symbol\"\"", "1992")
   )
 
+  private val artistsWithBadField = new CsvFile("artists-with-bad-field.csv").withContentsF(
+    Seq("1", "ABBA", "1992"),
+    Seq("2", "Roxette", "1986"),
+    Seq("3", "Europe", "0"),
+    Seq("4", "The Cardigans", "1992")
+  )
+
   filePaths = Map(
     "%ARTIST%" -> CsvFile.urify(artist),
     "%ARTIS_WITH_HEADER%" -> CsvFile.urify(artistWithHeaders),
     "%ARTIST_WITH_FIELD_DELIMITER%" -> CsvFile.urify(artistFieldTerminator),
-    "%ARTIST_WITH_ESCAPE_CHAR%" -> CsvFile.urify(artistsWithEscapeChar)
+    "%ARTIST_WITH_ESCAPE_CHAR%" -> CsvFile.urify(artistsWithEscapeChar),
+    "%ARTIST_WITH_BAD_FIELD%" -> CsvFile.urify(artistsWithBadField)
   )
 
   urls = Map(
     "%ARTIST%" -> (baseUrl + artist.getName),
     "%ARTIS_WITH_HEADER%" -> (baseUrl + artistWithHeaders.getName),
     "%ARTIST_WITH_FIELD_DELIMITER%" -> (baseUrl + artistFieldTerminator.getName),
-    "%ARTIST_WITH_ESCAPE_CHAR%" -> (baseUrl + artistsWithEscapeChar.getName)
+    "%ARTIST_WITH_ESCAPE_CHAR%" -> (baseUrl + artistsWithEscapeChar.getName),
+    "%ARTIST_WITH_BAD_FIELD%" -> (baseUrl + artistsWithBadField.getName)
   )
 
   @Test def should_import_data_from_a_csv_file() {
@@ -92,7 +103,7 @@ include::csv-files/artists.csv[]
         """
 A new node with the `Artist` label is created for each row in the CSV file.
 In addition, two columns from the CSV file are set as properties on the nodes.""",
-      assertions = (p) => assertStats(p, nodesCreated = 4, propertiesWritten = 8, labelsAdded = 4))
+      assertions = p => assertStats(p, nodesCreated = 4, propertiesWritten = 8, labelsAdded = 4))
   }
 
   @Test def should_import_data_from_a_csv_file_with_headers() {
@@ -111,7 +122,7 @@ include::csv-files/artists-with-headers.csv[]
       optionalResultExplanation = """
 This time, the file starts with a single row containing column names.
 Indicate this using `WITH HEADERS` and you can access specific fields by their corresponding column name.""",
-      assertions = (p) => assertStats(p, nodesCreated = 4, propertiesWritten = 8, labelsAdded = 4))
+      assertions = p => assertStats(p, nodesCreated = 4, propertiesWritten = 8, labelsAdded = 4))
   }
 
   @Test def should_import_data_from_a_csv_file_with_custom_field_terminator() {
@@ -133,7 +144,7 @@ include::csv-files/artists-fieldterminator.csv[]
       queryText = s"LOAD CSV FROM '%ARTIST_WITH_FIELD_DELIMITER%' AS line FIELDTERMINATOR ';' CREATE (:Artist {name: line[1], year: toInteger(line[2])})",
       optionalResultExplanation =
         "As values in this file are separated by a semicolon, a custom `FIELDTERMINATOR` is specified in the `LOAD CSV` clause.",
-      assertions = (p) => assertStats(p, nodesCreated = 4, propertiesWritten = 8, labelsAdded = 4))
+      assertions = p => assertStats(p, nodesCreated = 4, propertiesWritten = 8, labelsAdded = 4))
   }
 
   @Test def should_import_data_from_a_csv_file_with_periodic_commit() {
@@ -148,7 +159,7 @@ For more information, see <<query-using-periodic-commit-hint>>.
 """,
       queryText = s"USING PERIODIC COMMIT LOAD CSV FROM '%ARTIST%' AS line CREATE (:Artist {name: line[1], year: toInteger(line[2])})",
       optionalResultExplanation = "",
-      assertions = (p) => assertStats(p, nodesCreated = 4, propertiesWritten = 8, labelsAdded = 4))
+      assertions = p => assertStats(p, nodesCreated = 4, propertiesWritten = 8, labelsAdded = 4))
   }
 
   @Test def should_import_data_from_a_csv_file_with_periodic_commit_after_500_rows() {
@@ -157,7 +168,7 @@ For more information, see <<query-using-periodic-commit-hint>>.
       text = """You can set the number of rows as in the example, where it is set to 500 rows.""",
       queryText = s"USING PERIODIC COMMIT 500 LOAD CSV FROM '%ARTIST%' AS line CREATE (:Artist {name: line[1], year: toInteger(line[2])})",
       optionalResultExplanation = "",
-      assertions = (p) => assertStats(p, nodesCreated = 4, propertiesWritten = 8, labelsAdded = 4))
+      assertions = p => assertStats(p, nodesCreated = 4, propertiesWritten = 8, labelsAdded = 4))
   }
 
   @Test def should_import_data_from_a_csv_file_which_uses_the_escape_char() {
@@ -176,7 +187,29 @@ include::csv-files/artists-with-escaped-char.csv[]
       optionalResultExplanation = """
 Note that strings are wrapped in quotes in the output here.
 You can see that when comparing to the length of the string in this case!""",
-      assertions = (p) => assertEquals(List(Map("name" -> """The "Symbol"""", "year" -> 1992, "size" -> 12)), p.toList)
+      assertions = p => assertEquals(List(Map("name" -> """The "Symbol"""", "year" -> 1992, "size" -> 12)), p.toList)
+    )
+  }
+
+  @Test def should_generate_errors_on_import() {
+    testFailingQuery[CypherException](
+      title = "Import data with errors",
+      text = """
+In this example we have data that leads to an error in the import.
+Specifically we have an invalid 'year' field for one row, and our Cypher query will attempt to calculate a score by dividing by the year.
+
+.artists-with-bad-field.csv
+[source]
+----
+include::csv-files/artists-with-bad-field.csv[]
+----
+""",
+      queryText = s"LOAD CSV FROM '%ARTIST_WITH_BAD_FIELD%' AS line CREATE (a:Artist {name: line[1], score: 1/toInteger(line[2])}) RETURN a.name, a.score",
+      optionalResultExplanation =
+        """
+The error message contains information about the filename and line number in the CSV file where the error occured.
+Especially when importing very large data files, this can help track down and fix the import data so that the error does not occur.
+"""
     )
   }
 }
