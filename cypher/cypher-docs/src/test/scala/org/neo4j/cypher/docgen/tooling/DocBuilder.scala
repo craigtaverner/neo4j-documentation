@@ -132,13 +132,25 @@ trait DocBuilder {
   def important(f: => Unit) = inScope(AdmonitionScope(Important.apply), f)
 
   def query(q: String, assertions: QueryAssertions, parameters: (String, Any)*)(f: => Unit): Unit =
-    inScope(AutoformattedQueryScope(q.stripMargin, assertions, parameters), {
+    inScope(AutoformattedQueryScope(q.stripMargin, identity, assertions, parameters), {
       f
       consoleData() // Always append console data
     })
 
   def preformattedQuery(q: String, assertions: QueryAssertions, parameters: (String, Any)*)(f: => Unit): Unit =
-    inScope(PreformattedQueryScope(q.stripMargin, assertions, parameters), {
+    inScope(PreformattedQueryScope(q.stripMargin, identity, assertions, parameters), {
+      f
+      consoleData() // Always append console data
+    })
+
+  def queryX(q: String, rewriter: String => String, assertions: QueryAssertions, parameters: (String, Any)*)(f: => Unit): Unit =
+    inScope(AutoformattedQueryScope(q.stripMargin, rewriter, assertions, parameters), {
+      f
+      consoleData() // Always append console data
+    })
+
+  def preformattedQueryX(q: String, rewriter: String => String, assertions: QueryAssertions, parameters: (String, Any)*)(f: => Unit): Unit =
+    inScope(PreformattedQueryScope(q.stripMargin, rewriter, assertions, parameters), {
       f
       consoleData() // Always append console data
     })
@@ -206,12 +218,12 @@ object DocBuilder {
     def params: Seq[(String, Any)]
   }
 
-  case class AutoformattedQueryScope(queryText: String, assertions: QueryAssertions, params: Seq[(String, Any)]) extends QueryScope {
-    override def toContent = Query(queryText, assertions, init, content, params)
+  case class AutoformattedQueryScope(queryText: String, rewriter: String => String, assertions: QueryAssertions, params: Seq[(String, Any)]) extends QueryScope {
+    override def toContent = Query(queryText, rewriter, assertions, init, content, params, keepMyNewlines = false)
   }
 
-  case class PreformattedQueryScope(queryText: String, assertions: QueryAssertions, params: Seq[(String, Any)]) extends QueryScope {
-    override def toContent = Query(queryText, assertions, init, content, params, keepMyNewlines = true)
+  case class PreformattedQueryScope(queryText: String, rewriter: String => String, assertions: QueryAssertions, params: Seq[(String, Any)]) extends QueryScope {
+    override def toContent = Query(queryText, rewriter, assertions, init, content, params, keepMyNewlines = true)
   }
 }
 

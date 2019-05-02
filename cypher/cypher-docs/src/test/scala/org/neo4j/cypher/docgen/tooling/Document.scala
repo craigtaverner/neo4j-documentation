@@ -22,8 +22,8 @@ package org.neo4j.cypher.docgen.tooling
 import org.neo4j.cypher.docgen.tooling.RunnableInitialization.InitializationFunction
 import org.neo4j.cypher.example.JavaExecutionEngineDocTest
 import org.neo4j.cypher.internal.javacompat.GraphDatabaseCypherService
-import org.neo4j.kernel.GraphDatabaseQueryService
 import org.neo4j.cypher.internal.v4_0.util.{Eagerly, InternalException}
+import org.neo4j.kernel.GraphDatabaseQueryService
 
 import scala.collection.JavaConverters._
 
@@ -66,7 +66,7 @@ case class Document(title: String, id: String,
                     private val init: RunnableInitialization,
                     content: Content) {
 
-  def asciiDoc =
+  def asciiDoc: String =
       s"""[[$id]]
          |= $title
          |
@@ -87,7 +87,7 @@ sealed trait Content {
 
 trait NoQueries {
   self: Content =>
-  override def runnableContent(init: RunnableInitialization, queryText: Option[String]) = Seq.empty
+  override def runnableContent(init: RunnableInitialization, queryText: Option[String]): Seq[Nothing] = Seq.empty
 }
 
 case object NoContent extends Content with NoQueries {
@@ -95,7 +95,7 @@ case object NoContent extends Content with NoQueries {
 }
 
 case class ContentChain(a: Content, b: Content) extends Content {
-  override def asciiDoc(level: Int) = a.asciiDoc(level) + b.asciiDoc(level)
+  override def asciiDoc(level: Int): String = a.asciiDoc(level) + b.asciiDoc(level)
 
   override def toString: String = s"$a ~ $b"
 
@@ -104,7 +104,7 @@ case class ContentChain(a: Content, b: Content) extends Content {
 }
 
 case class Abstract(s: String) extends Content with NoQueries {
-  override def asciiDoc(level: Int) =
+  override def asciiDoc(level: Int): String =
     s"""[abstract]
        |--
        |$s
@@ -114,15 +114,15 @@ case class Abstract(s: String) extends Content with NoQueries {
 }
 
 case class Heading(s: String) extends Content with NoQueries {
-  override def asciiDoc(level: Int) = "." + s + NewLine
+  override def asciiDoc(level: Int): String = "." + s + NewLine
 }
 
 case class Paragraph(s: String) extends Content with NoQueries {
-  override def asciiDoc(level: Int) = s + NewLine + NewLine
+  override def asciiDoc(level: Int): String = s + NewLine + NewLine
 }
 
 case class Function(syntax: String, returns: String, arguments: Seq[(String, String)]) extends Content with NoQueries {
-  override def asciiDoc(level: Int) = {
+  override def asciiDoc(level: Int): String = {
     val args = arguments.map(x => "| `" + x._1 + "` | " + x._2).mkString("", NewLine, "")
     val formattedReturn = if (!returns.isEmpty) Array("*Returns:*", "|===", "|", returns, "|===").mkString(NewLine, NewLine, "") else ""
     val formattedArguments = if(arguments.nonEmpty) Array("*Arguments:*", "[options=\"header\"]", "|===", "| Name | Description", args, "|===").mkString(NewLine, NewLine, "") else ""
@@ -135,8 +135,8 @@ case class Function(syntax: String, returns: String, arguments: Seq[(String, Str
 
 }
 
-case class Consideration(lines: Seq[(String)]) extends Content with NoQueries {
-  override def asciiDoc(level: Int) = {
+case class Consideration(lines: Seq[String]) extends Content with NoQueries {
+  override def asciiDoc(level: Int): String = {
     val items = lines.map(x => "|" + x).mkString("", NewLine, "")
     val formattedLines = if(lines.nonEmpty) Array("*Considerations:*", "|===", items, "|===").mkString(NewLine, NewLine, "") else ""
     String.format(
@@ -199,7 +199,7 @@ trait Admonitions extends Content with NoQueries {
 
   def name: String = this.getClass.getSimpleName.toUpperCase
 
-  override def asciiDoc(level: Int) = {
+  override def asciiDoc(level: Int): String = {
     val inner = innerContent.asciiDoc(level)
     val head = heading.map("." + _ + NewLine).getOrElse("")
 
@@ -247,12 +247,20 @@ case class QueryResultTable(columns: Seq[String], rows: Seq[ResultRow], footer: 
   private def escape(in: String): String = "+%s+".format(in)
 }
 
-case class Query(queryText: String, assertions: QueryAssertions, myInit: RunnableInitialization, content: Content, params: Seq[(String, Any)], keepMyNewlines: Boolean = false) extends Content {
+object Query {
+  def apply(queryText: String, assertions: QueryAssertions, myInit: RunnableInitialization, content: Content, params: Seq[(String, Any)]): Query =
+    Query(queryText, identity, assertions, myInit, content, params, keepMyNewlines = false)
 
-  val prettified = Prettifier(queryText, keepMyNewlines)
+  def apply(queryText: String, assertions: QueryAssertions, myInit: RunnableInitialization, content: Content, params: Seq[(String, Any)], keepMyNewlines: Boolean): Query =
+    Query(queryText, identity, assertions, myInit, content, params, keepMyNewlines)
+}
+
+case class Query(queryText: String, rewriter: String => String, assertions: QueryAssertions, myInit: RunnableInitialization, content: Content, params: Seq[(String, Any)], keepMyNewlines: Boolean) extends Content {
+
+  val prettified = Prettifier(rewriter(queryText), keepMyNewlines)
   val parameterText: String = if (params.isEmpty) "" else JavaExecutionEngineDocTest.parametersToAsciidoc(mapMapValue(params.toMap))
 
-  override def asciiDoc(level: Int) = {
+  override def asciiDoc(level: Int): String = {
     s"""$parameterText
        |.Query
        |[source, cypher]
@@ -263,8 +271,8 @@ case class Query(queryText: String, assertions: QueryAssertions, myInit: Runnabl
        |""".stripMargin + content.asciiDoc(level)
   }
 
-  override def runnableContent(init: RunnableInitialization, queryText: Option[String]) =
-    content.runnableContent(init ++ myInit, queryText = Some(prettified))
+  override def runnableContent(init: RunnableInitialization, ignore: Option[String]): Seq[ContentWithInit] =
+    content.runnableContent(init ++ myInit, Some(queryText))
 
   private def mapMapValue(v: Any): Any = v match {
     case v: Map[_, _] => Eagerly.immutableMapValues(v, mapMapValue).asJava
@@ -300,18 +308,18 @@ case class ConsoleData(globalInitQueries: Seq[String], localInitQueries: Seq[Str
 }
 
 case class GraphViz(s: String) extends Content with NoQueries {
-  override def asciiDoc(level: Int) = s + NewLine + NewLine
+  override def asciiDoc(level: Int): String = s + NewLine + NewLine
 }
 
 case class ExecutionPlan(planString: String) extends Content with NoQueries {
-  override def asciiDoc(level: Int) = {
+  override def asciiDoc(level: Int): String = {
     s".Query plan\n[source]\n----\n$planString\n----\n\n"
   }
 }
 
 case class Section(heading: String, id: Option[String], init: RunnableInitialization, content: Content) extends Content {
 
-  override def asciiDoc(level: Int) = {
+  override def asciiDoc(level: Int): String = {
     val idRef = id.map("[[" + _ + "]]\n").getOrElse("")
     val levelIndent = (0 to (level + 1)).map(_ => "=").mkString
     idRef + levelIndent + " " + heading + NewLine + NewLine + content.asciiDoc(level + 1)
@@ -334,7 +342,7 @@ trait QueryResultPlaceHolder {
   self: Content =>
   override def asciiDoc(level: Int) =
     throw new InternalException(s"This object should have been rewritten away already ${this.getClass.getSimpleName}")
-  override def runnableContent(init: RunnableInitialization, queryText: Option[String]) = Seq(ContentWithInit(init, queryText, this))
+  override def runnableContent(init: RunnableInitialization, queryText: Option[String]): Seq[ContentWithInit] = Seq(ContentWithInit(init, queryText, this))
 }
 
 // NOTE: These must _not_ be case classes, otherwise they will not be compared by identity

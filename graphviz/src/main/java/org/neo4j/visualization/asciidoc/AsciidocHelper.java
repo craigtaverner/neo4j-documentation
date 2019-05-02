@@ -172,6 +172,11 @@ public class AsciidocHelper
         return "[source]\n----\n" + output + "\n----\n";
     }
 
+    public static String createOutputSnippetWithSubs( final String output, String substitutions )
+    {
+        return format( "[source, subs=%s]\n----\n" + output + "\n----\n", substitutions );
+    }
+
     public static String createQueryResultSnippet( final String output )
     {
         return "[queryresult]\n----\n" + output
@@ -180,7 +185,12 @@ public class AsciidocHelper
 
     public static String createQueryFailureSnippet( final String output )
     {
-        return "[source]\n----\n" + wrapText( output ) + "\n----\n";
+        return "[source, subs=%s]\n----\n" + wrapText( output ) + "\n----\n";
+    }
+
+    public static String createQueryFailureSnippetWithSubs( final String output )
+    {
+        return "[source, subs=attributes+]\n----\n" + wrapText( output ) + "\n----\n";
     }
 
     private static String wrapText( final String text )

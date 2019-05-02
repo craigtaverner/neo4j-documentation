@@ -42,7 +42,7 @@ import org.neo4j.kernel.impl.api.KernelStatement
 import org.neo4j.kernel.impl.api.index.IndexingService
 import org.neo4j.kernel.impl.api.index.sampling.IndexSamplingMode
 import org.neo4j.kernel.impl.core.ThreadToStatementContextBridge
-import org.neo4j.kernel.impl.coreapi.{InternalTransaction, PropertyContainerLocker}
+import org.neo4j.kernel.impl.coreapi.InternalTransaction
 import org.neo4j.kernel.impl.query.Neo4jTransactionalContextFactory
 import org.neo4j.kernel.impl.util.ValueUtils
 import org.neo4j.values.virtual.VirtualValues
@@ -294,6 +294,7 @@ abstract class DocumentingTestBase extends JUnitSuite with DocumentationHelper w
     }
 
     assert(filePaths.size == urls.size)
+    fileUrls = filePaths.keys.flatMap(k=>Seq(filePaths(k) -> urls(k), filePaths(k).replace("file:","")->urls(k))).toMap
 
     val testQuery = filePaths.foldLeft(query)( (acc, entry) => acc.replace(entry._1, entry._2))
     val docQuery = urls.foldLeft(query)( (acc, entry) => acc.replace(entry._1, entry._2))
@@ -424,6 +425,7 @@ abstract class DocumentingTestBase extends JUnitSuite with DocumentationHelper w
   protected val baseUrl = System.getProperty("remote-csv-upload")
   var filePaths: Map[String, String] = Map.empty
   var urls: Map[String, String] = Map.empty
+  var fileUrls: Map[String, String] = Map.empty
 
   def section: String
   val dir: File = createDir(section)
@@ -571,6 +573,9 @@ abstract class DocumentingTestBase extends JUnitSuite with DocumentationHelper w
     case v: Any       => v
   }
 
+  private def mapFilePath(message: String): String =
+    fileUrls.foldLeft(message)((acc, entry) => acc.replace(entry._1, entry._2))
+
   private def dumpQuery(dir: File,
                         writer: PrintWriter,
                         testId: String,
@@ -596,7 +601,7 @@ abstract class DocumentingTestBase extends JUnitSuite with DocumentationHelper w
     result match {
       case Left(failure) =>
         output.append(".Error message\n")
-        output.append(AsciidocHelper.createQueryFailureSnippet(failure.getMessage))
+        output.append(AsciidocHelper.createQueryFailureSnippetWithSubs(mapFilePath(failure.getMessage)))
       case Right(rightResult) =>
         output.append(".Result\n")
         output.append(AsciidocHelper.createQueryResultSnippet(rightResult))
