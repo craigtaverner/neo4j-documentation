@@ -22,6 +22,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -57,6 +58,7 @@ public class CommunityServerBuilder
     private SocketAddress httpsAddress = new SocketAddress( "localhost", 7473 );
     private String maxThreads = null;
     private String dataDir = null;
+    private File temporaryFolder = null;
     private String restUri = "/db/";
     private PreFlightTasks preflightTasks;
     private final HashMap<String, String> thirdPartyPackages = new HashMap<>();
@@ -86,19 +88,19 @@ public class CommunityServerBuilder
         Log log = logProvider.getLog( getClass() );
         Config config = Config.newBuilder().fromFile( configFile ).build();
         config.setLogger( log );
-        return build( Optional.of( configFile ), config, GraphDatabaseDependencies.newDependencies().userLogProvider( logProvider )
+        return build( Optional.of( configFile ), Optional.of(temporaryFolder), config, GraphDatabaseDependencies.newDependencies().userLogProvider( logProvider )
                 .monitors( new Monitors() ) );
     }
 
-    protected CommunityNeoServer build( Optional<File> configFile, Config config, ExternalDependencies dependencies )
+    protected CommunityNeoServer build( Optional<File> configFile, Optional<File> root, Config config, ExternalDependencies dependencies )
     {
-        return new TestCommunityNeoServer( config, configFile, dependencies );
+        return new TestCommunityNeoServer( config, configFile, root, dependencies );
     }
 
     public File createConfigFiles() throws IOException
     {
         File temporaryConfigFile = ServerTestUtils.createTempConfigFile();
-        File temporaryFolder = ServerTestUtils.createTempDir();
+        temporaryFolder = ServerTestUtils.createTempDir();
 
         ServerTestUtils.writeConfigToFile( createConfiguration( temporaryFolder ), temporaryConfigFile );
 
@@ -236,11 +238,13 @@ public class CommunityServerBuilder
     private static class TestCommunityNeoServer extends CommunityNeoServer
     {
         private final Optional<File> configFile;
+        private final Optional<File> temporaryFolder;
 
-        private TestCommunityNeoServer( Config config, Optional<File> configFile, ExternalDependencies dependencies )
+        private TestCommunityNeoServer( Config config, Optional<File> configFile, Optional<File> temporaryFolder, ExternalDependencies dependencies )
         {
             super( config, new CommunityGraphFactory(), dependencies );
             this.configFile = configFile;
+            this.temporaryFolder = temporaryFolder;
         }
 
         @Override
@@ -248,6 +252,17 @@ public class CommunityServerBuilder
         {
             super.stop();
             configFile.ifPresent( File::delete );
+            temporaryFolder.ifPresent( d ->
+            {
+                try
+                {
+                    Files.delete( d.toPath() );
+                }
+                catch ( IOException e )
+                {
+                    e.printStackTrace();
+                }
+            } );
         }
     }
 }
