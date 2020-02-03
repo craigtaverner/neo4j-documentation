@@ -25,6 +25,13 @@
         <docs-plugin.skip>false</docs-plugin.skip>
         <scala-test-compile-phase>process-test-resources</scala-test-compile-phase>
         <test.runner.jvm.settings.additional>
+            -XX:+UnlockCommercialFeatures
+            -XX:+UnlockDiagnosticVMOptions
+            -XX:+FlightRecorder
+            -XX:+DebugNonSafepoints
+            -XX:+PreserveFramePointer
+            -XX:FlightRecorderOptions=stackdepth=256
+            -XX:StartFlightRecording=filename=profile.jfr
             -Dorg.neo4j.kernel.impl.api.KernelStatement.trackStatements=false
         </test.runner.jvm.settings.additional>
         <license-text.header>build/AGPL-3-header.txt</license-text.header>
@@ -83,6 +90,7 @@
                         <systemPropertyVariables>
                             <dbms.pagecache.memory.default.override>8m</dbms.pagecache.memory.default.override>
                         </systemPropertyVariables>
+                        <argLine>${test.runner.jvm.settings.additional}</argLine>
                         <includes>
                             <include>**/*Test.java</include>
                             <include>**/Test*.java</include>
