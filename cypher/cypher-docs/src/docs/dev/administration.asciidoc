@@ -40,6 +40,7 @@ This section explains how to use Cypher to administer Neo4j databases, such as c
 ** <<administration-security-reads, Read privileges>>
 ** <<administration-security-writes, Write privileges>>
 ** <<administration-security-administration, Security of administration>>
+** <<administration-security-indexes, Security and indexing>>
 
 
 Neo4j supports the management of manage multiple databases within the same DBMS.
